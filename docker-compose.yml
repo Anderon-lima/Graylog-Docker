@@ -1,18 +1,69 @@
 version: '2'
+networks: 
+  graynet:
 services:
   mongo:
-    image: "mongo:3"
+    image: mongo:3
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - graynet 
   elasticsearch:
-    image: "elasticsearch:2"
-    command: "elasticsearch -Des.cluster.name='graylog'"
-  graylog:
-    image: graylog2/server:2.2.1-1
-    environment:
-      GRAYLOG_PASSWORD_SECRET: somepasswordpepper
-      GRAYLOG_ROOT_PASSWORD_SHA2: 8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
-      GRAYLOG_WEB_ENDPOINT_URI: http://192.168.0.208:9000/api
-    depends_on:
-      - mongo
-      - elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.9
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
     ports:
-      - "9000:9000"
+      - 9200:9200
+      - 9300:9300
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    networks:
+      - graynet 
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    mem_limit: 1g
+  
+  filebeat:
+    build: ./filebeat
+    networks:
+      - graynet
+    ports:
+      # Syslog TCP
+      - 514:514
+      # Syslog UDP
+      - 514:514/udp
+      # filebeat / logstash
+      - 5044:5044
+      # GELF TCP
+      - 12201:12201
+      # GELF UDP
+      - 12201:12201/udp  
+  graylog:
+    image: graylog/graylog:2.5
+    # volumes:
+            #    - ./graylog_journal:/usr/share/graylog/data/journal
+            #      - ./graylog/config:/usr/share/graylog/data/config
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=RePa8pheeh8choh0vohphai8eena7quah1lei4veod5ay5ou2Ohshiew3aqu2voono
+      # Password: admin
+      - GRAYLOG_ROOT_PASSWORD_SHA2=8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
+      - GRAYLOG_WEB_ENDPOINT_URI=http://127.0.0.1:9000/api
+    networks:
+      - graynet 
+    ports:
+      # Graylog web interface and REST API
+      - 9000:9000
+volumes:
+  mongo_data:
+    driver: local
+  es_data:
+    driver: local
+  graylog_journal:
+    driver: local
+
